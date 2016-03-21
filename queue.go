@@ -26,7 +26,7 @@ func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan erro
 
 			// Task data is JSON, decode it to AsyncTask struct.
 			var task AsyncTask
-			err := json.Unmarshal(d.Body, task)
+			err := json.Unmarshal(d.Body, &task)
 			if err != nil {
 				ec <- err
 				fmt.Println("Could not unmarshal data.", err.Error())

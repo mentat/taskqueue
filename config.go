@@ -17,13 +17,13 @@ type rateSpec struct {
 
 type queueConfig struct {
 	Name              string
-	Concurrency       int
-	Rate              string
+	Concurrency       int    `ini:"concurrency"`
+	Rate              string `ini:"rate"`
+	RetryLimit        int    `ini:"retry_limit"`
+	MinBackoffSeconds int    `ini:"min_backoff_seconds"`
+	MaxBackoffSeconds int    `ini:"max_backoff_seconds"`
+	MaxDoublings      int    `ini:"max_doublings"`
 	RateDetails       rateSpec
-	RetryLimit        int
-	MinBackoffSeconds int
-	MaxBackoffSeconds int
-	MaxDoublings      int
 }
 
 type ServerConfig struct {
@@ -52,15 +52,15 @@ func ParseConfigFile(filename string) (*ServerConfig, error) {
 	}
 
 	sectionNames := cfg.SectionStrings()
-	sections := make([]queueConfig, 0, len(sectionNames))
+	sections := make([]queueConfig, 0, len(sectionNames)-1)
 
 	for i := range sectionNames {
-		if sectionNames[i] == "" {
-			panic("Nope")
+		if sectionNames[i] == "DEFAULT" {
+			continue
 		}
 
 		section := queueConfig{
-			Name:              "default",
+			Name:              sectionNames[i],
 			Concurrency:       1,
 			Rate:              "1/s",
 			RetryLimit:        -1,
@@ -69,8 +69,15 @@ func ParseConfigFile(filename string) (*ServerConfig, error) {
 			MaxDoublings:      -1,
 		}
 
+		err := cfg.Section(sectionNames[i]).MapTo(&section)
+		if err != nil {
+			return nil, fmt.Errorf("Configuration format invalid: %s", err)
+		}
+
 		sections = append(sections, section)
 	}
+
+	config.Queues = sections
 
 	return config, nil
 }

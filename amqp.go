@@ -41,6 +41,20 @@ func (server *AMQP) Connect() error {
 	return nil
 }
 
+func (server *AMQP) Publish(queueName, body string) error {
+	err := server.channel.Publish(
+		"",        // exchange
+		queueName, // routing key
+		false,     // mandatory
+		false,
+		amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "text/plain",
+			Body:         []byte(body),
+		})
+	return err
+}
+
 func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
 	/*
 		Asynchronously consume items off the queue by returning a channel.
