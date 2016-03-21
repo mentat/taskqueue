@@ -9,6 +9,9 @@ type AMQP struct {
 }
 
 func NewAMQP(connect string) *AMQP {
+	/*
+		Create a new AMQP object.
+	*/
 	server := &AMQP{
 		connectString: connect,
 	}
@@ -16,6 +19,9 @@ func NewAMQP(connect string) *AMQP {
 }
 
 func (server *AMQP) Connect() error {
+	/*
+		Try to connect to the RabbitMQ server.
+	*/
 	conn, err := amqp.Dial(server.connectString)
 
 	if err != nil {
@@ -36,6 +42,9 @@ func (server *AMQP) Connect() error {
 }
 
 func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
+	/*
+		Asynchronously consume items off the queue by returning a channel.
+	*/
 
 	q, err := server.channel.QueueDeclare(
 		queueName, // name
@@ -68,6 +77,9 @@ func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error)
 }
 
 func (server *AMQP) Close() error {
+	/*
+		Close out the server when we are done.
+	*/
 
 	if server.conn != nil {
 		server.conn.Close()
