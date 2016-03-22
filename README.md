@@ -1,6 +1,7 @@
 # taskqueue
 
-A deferred task execution system using RabbitMQ written in Go.
+A deferred task execution system using RabbitMQ written in Go.  It is a
+lightweight replacement for Celery (in Webhook mode).
 
 Taskqueue listens on a RabbitMQ connection for tasks to be created by the
 application.  It then executes a request to the given task URL with a
