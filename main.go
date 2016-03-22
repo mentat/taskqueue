@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,13 +25,17 @@ func main() {
 
 	fileName := os.Getenv("TASKQUEUE_CONFIG_FILE")
 	if fileName == "" {
-		fileName = "taskqueue.ini"
+		fileName = "/etc/taskqueue/taskqueue.ini"
 	}
+
+	flag.StringVar(&fileName, "config", fileName, "Configuration file.")
+	flag.Parse()
 
 	config, err := ParseConfigFile(fileName)
 
 	if err != nil {
 		fmt.Println("The configuration file could not be parsed:", err)
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
