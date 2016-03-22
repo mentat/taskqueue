@@ -65,7 +65,10 @@ func calculateEta(now *time.Time, rt *RetryData, task *AsyncTask, config *queueC
 }
 
 func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan error) {
-
+	/*
+	   Read from a RabbitMQ queue and spawn a goroutine to handle the
+	   dispatch of the HTTP request.
+	*/
 	// Create semaphore for concurrency
 	sem := make(chan bool, config.Concurrency)
 	errorChan := make(chan error, config.Concurrency)
