@@ -10,11 +10,11 @@ import (
 
 type AsyncTask struct {
 	URL        string `json:"url"`
-	ETA        int    `json:"eta"`
+	ETA        int64  `json:"eta"`
 	Countdown  int    `json:"countdown"`
-	MaxRetries int    `json:"max_retries"`
+	MaxRetries int64  `json:"max_retries"`
 	Payload    string `json:"payload"`
-	Expires    int    `json:"expires"`
+	Expires    int64  `json:"expires"`
 	Queue      string `json:"queue"`
 }
 
@@ -75,17 +75,31 @@ func decodeJSON(req *http.Request) (*AsyncTask, error) {
 func CreatePushTask(http.ResponseWriter, *http.Request) {
 	/*
 	   Create a new Push Task.
+	   Not needed at the moment for the requirements, but added as a
+	   placeholder.
 	*/
 }
 
 func ModifyPushTask(http.ResponseWriter, *http.Request) {
-	/* Modify a Push task. */
+	/*
+		Modify a Push task.
+		Not needed at the moment for the requirements, but added as a
+		placeholder
+	*/
 }
 
 func DeletePushTask(http.ResponseWriter, *http.Request) {
-	/* Delete a Push task. */
+	/*
+		Delete a Push task.
+		Not needed at the moment for the requirements, but added as a
+		placeholder
+	*/
 }
 
 func GetPushTask(http.ResponseWriter, *http.Request) {
-	/* Get a Push task. */
+	/*
+		Get a Push task.
+		Not needed at the moment for the requirements, but added as a
+		placeholder
+	*/
 }

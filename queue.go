@@ -14,6 +14,7 @@ import (
 type RetryData struct {
 	MaxRetries     int64
 	CurrentRetries int64
+	LastBackoff    int
 	ETA            int64 // Time as posixtime
 }
 
@@ -28,6 +29,13 @@ func NewThreadSafeMap() *ThreadSafeMap {
 	}
 	return tsm
 }
+
+func (m *ThreadSafeMap) Delete(key string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	delete(m.data, key)
+}
+
 func (m *ThreadSafeMap) Set(key string, data RetryData) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -39,6 +47,21 @@ func (m *ThreadSafeMap) Get(key string) (data RetryData, ok bool) {
 	defer m.mutex.RUnlock()
 	data, ok = m.data[key]
 	return
+}
+
+func calculateEta(now *time.Time, rt *RetryData, task *AsyncTask, config *queueConfig) {
+	/*
+	   Calculate the new ETA for the task. Update the Posix time on the RT data.
+	*/
+	if rt.LastBackoff == 0 {
+		rt.LastBackoff = config.MinBackoffSeconds
+	} else if rt.CurrentRetries < int64(config.MaxDoublings) {
+		if (rt.LastBackoff * 2) < config.MaxBackoffSeconds {
+			rt.LastBackoff = rt.LastBackoff * 2
+		}
+		// Otherwise leave the backoff as is
+	}
+	rt.ETA = now.Unix() + int64(rt.LastBackoff)
 }
 
 func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan error) {
@@ -81,16 +104,23 @@ func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan erro
 				return
 			}
 
+			// Current time of system
+			now := time.Now()
+
 			// Check if we've retried this before:
-			rt, ok := retryData.Get(d.MessageId)
-			if ok {
-				// Check for ETA, don't execute early.
-				if rt.ETA > time.Now().Unix() {
-					// Sleep a little bit to prevent a busy loop.
-					time.Sleep(100 * time.Millisecond)
-					d.Nack(false, true)
-					return
-				}
+			rt, retryDataOk := retryData.Get(d.MessageId)
+			if !retryDataOk {
+				rt.CurrentRetries = 0
+				rt.MaxRetries = task.MaxRetries
+				rt.ETA = task.ETA
+			}
+
+			// Check for ETA, don't execute early.
+			if rt.ETA > now.Unix() {
+				// Sleep a little bit to prevent a busy loop.
+				time.Sleep(100 * time.Millisecond)
+				d.Nack(false, true)
+				return
 			}
 
 			// Give the webhook a long timeout...
@@ -109,10 +139,14 @@ func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan erro
 			} else if resp.StatusCode != 200 {
 				// Some kind of error, retry
 				rt.CurrentRetries++
+				// Check to see if we have exceeded the max retries.
 				if rt.MaxRetries != -1 && rt.CurrentRetries > rt.MaxRetries {
+					retryData.Delete(d.MessageId)
 					Error.Printf("Task %s exceeded maximum retries and was cancelled.", d.MessageId)
 					d.Nack(false, false)
 				} else {
+					calculateEta(&now, &rt, &task, config)
+					retryData.Set(d.MessageId, rt)
 					d.Nack(false, true)
 				}
 
