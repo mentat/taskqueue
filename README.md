@@ -31,3 +31,7 @@ or use supplied init file.
 
 The default location for the configuration file is /etc/taskqueue/taskqueue.ini
 but you can also set it via the TASKQUEUE_CONFIG_FILE environmental variable.
+
+For command line options run:
+
+    ./taskqueue -h

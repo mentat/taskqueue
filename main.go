@@ -35,7 +35,6 @@ func main() {
 
 	if err != nil {
 		fmt.Println("The configuration file could not be parsed:", err)
-		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
