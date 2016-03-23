@@ -15,7 +15,7 @@ It works like this:
 {
   "url":"/tasks/my_fun_task",
   "countdown": 20,
-  "max_retries": 3,
+  "max_retries": 3
 }
 ```
  2. The taskqueue service receives this task from RabbitMQ and executes the
