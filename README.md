@@ -15,7 +15,8 @@ It works like this:
 {
   "url":"/tasks/my_fun_task",
   "countdown": 20,
-  "max_retries": 3
+  "max_retries": 3,
+  "roll_back":"/tasks/my_fun_task"
 }
 ```
  * The taskqueue service receives this task from RabbitMQ and executes the
@@ -27,6 +28,8 @@ It works like this:
 A task execution message has the following format:
 
  * __url__ - the path or full URL of the task to execute.
+ * __roll_back__ - the path or full URL to call if the task suffers a permanent
+   failure.
  * __eta__ - the Posix timestamp of when this task should run (optional).
  * __countdown__ - the number of seconds to wait before running the task (optional).
  * __max_retries__ - the number of times to retry this task (optional, default is
