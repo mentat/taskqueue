@@ -22,6 +22,7 @@ type AsyncTask struct {
 var RabbitServer *AMQP
 
 func main() {
+	fmt.Println("Starting up...")
 
 	fileName := os.Getenv("TASKQUEUE_CONFIG_FILE")
 	if fileName == "" {

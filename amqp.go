@@ -55,6 +55,18 @@ func (server *AMQP) Publish(queueName, body string) error {
 	return err
 }
 
+func (server *AMQP) PurgeQueue(queueName string) error {
+	/*
+		Purge all pending messages in a queue.
+	*/
+	_, err := server.channel.QueuePurge(queueName, true)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
 	/*
 		Asynchronously consume items off the queue by returning a channel.

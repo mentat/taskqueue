@@ -69,6 +69,7 @@ func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan erro
 	   Read from a RabbitMQ queue and spawn a goroutine to handle the
 	   dispatch of the HTTP request.
 	*/
+
 	// Create semaphore for concurrency
 	sem := make(chan bool, config.Concurrency)
 	errorChan := make(chan error, config.Concurrency)
@@ -136,10 +137,12 @@ func readQueue(config *queueConfig, messages <-chan amqp.Delivery, err chan erro
 				strings.NewReader(task.Payload))
 
 			if err != nil {
+				fmt.Printf("ERR1: %s\n", err)
 				// Some kind of error, retry, don't count this
 				// as a retry since it is probably a service issue
 				d.Nack(false, true)
 			} else if resp.StatusCode != 200 {
+				fmt.Printf("ERR2\n")
 				// Some kind of error, retry
 				rt.CurrentRetries++
 				// Check to see if we have exceeded the max retries.
