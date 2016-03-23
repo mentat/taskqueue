@@ -51,13 +51,13 @@ func main() {
 	// Spawn goroutines to handle each queue's operation.
 	for i := range config.Queues {
 
-		delivery, err := RabbitServer.ConsumeQueue(config.Queues[i].Name)
+		channel, err := RabbitServer.GetChannel()
 		if err != nil {
-			fmt.Println("Could not read queue:", config.Queues[i].Name, err)
+			fmt.Println("Could not get channel:", err)
 			os.Exit(1)
 		}
 
-		go readQueue(&config.Queues[i], delivery, errChan)
+		go readQueue(&config.Queues[i], channel, errChan)
 	}
 
 	r := mux.NewRouter()

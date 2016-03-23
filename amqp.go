@@ -5,6 +5,9 @@ import "github.com/streadway/amqp"
 type AMQP struct {
 	connectString string
 	conn          *amqp.Connection
+}
+
+type AMQPChannel struct {
 	channel       *amqp.Channel
 }
 
@@ -16,6 +19,18 @@ func NewAMQP(connect string) *AMQP {
 		connectString: connect,
 	}
 	return server
+}
+
+func (server *AMQP) Close() error {
+	/*
+		Close out the server when we are done.
+	*/
+
+	if server.conn != nil {
+		server.conn.Close()
+	}
+
+	return nil
 }
 
 func (server *AMQP) Connect() error {
@@ -30,23 +45,50 @@ func (server *AMQP) Connect() error {
 
 	server.conn = conn
 
+	return nil
+}
+
+func (server *AMQP) GetChannel() (*AMQPChannel, error) {
 	ch, err := server.conn.Channel()
+
+	if err != nil {
+		return nil, err
+	}
+
+	channel := &AMQPChannel{
+		channel: ch,
+	}
+
+	return channel, nil
+}
+
+func (server *AMQP) PurgeQueue(queueName string) error {
+	/*
+		Purge all pending messages in a queue.
+	*/
+
+	// Use a throw-away channel.
+	ch, err := server.conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	_, err = ch.QueuePurge(queueName, true)
 
 	if err != nil {
 		return err
 	}
 
-	server.channel = ch
-
 	return nil
 }
 
-func (server *AMQP) Publish(queueName, body string) error {
+
+func (server *AMQPChannel) Publish(queueName, body string) error {
 	err := server.channel.Publish(
 		"",        // exchange
 		queueName, // routing key
-		false,     // mandatory
-		false,
+		true,      // mandatory
+		false,	   // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
@@ -55,9 +97,9 @@ func (server *AMQP) Publish(queueName, body string) error {
 	return err
 }
 
-func (server *AMQP) CountMessages(queueName string) (int64, error) {
+func (server *AMQPChannel) CountMessages(queueName string) (int64, error) {
 	/*
-	Get the count of pending messages in a queue.
+		Get the count of pending messages in a queue.
 	*/
 	q, err := server.channel.QueueInspect(queueName)
 
@@ -67,19 +109,7 @@ func (server *AMQP) CountMessages(queueName string) (int64, error) {
 	return int64(q.Messages), nil
 }
 
-func (server *AMQP) PurgeQueue(queueName string) error {
-	/*
-		Purge all pending messages in a queue.
-	*/
-	_, err := server.channel.QueuePurge(queueName, true)
-
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
+func (server *AMQPChannel) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
 	/*
 		Asynchronously consume items off the queue by returning a channel.
 	*/
@@ -114,14 +144,12 @@ func (server *AMQP) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error)
 	return msgs, nil
 }
 
-func (server *AMQP) Close() error {
+
+
+func (server *AMQPChannel) Close() error {
 	/*
 		Close out the server when we are done.
 	*/
-
-	if server.conn != nil {
-		server.conn.Close()
-	}
 
 	if server.channel != nil {
 		server.channel.Close()

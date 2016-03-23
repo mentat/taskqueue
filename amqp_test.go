@@ -13,14 +13,19 @@ func TestAMQPConnect(t *testing.T) {
 		t.Fatalf("Cannot connect to Rabbit: %s", err)
 	}
 
-	c, err := server.ConsumeQueue("MyStuff")
+	ch, err := server.GetChannel()
+	if err != nil {
+		t.Fatalf("Cannot get channel: %s", err)
+	}
+
+	c, err := ch.ConsumeQueue("MyStuff")
 	if err != nil {
 		t.Fatalf("Cannot consume Rabbit queue: %s", err)
 	}
 
-	server.Publish("MyStuff", "message1")
-	server.Publish("MyStuff", "message2")
-	server.Publish("MyStuff", "message3")
+	ch.Publish("MyStuff", "message1")
+	ch.Publish("MyStuff", "message2")
+	ch.Publish("MyStuff", "message3")
 
 	count := 0
 	for msg := range c {
@@ -30,5 +35,6 @@ func TestAMQPConnect(t *testing.T) {
 			break
 		}
 	}
+	ch.Close()
 	server.Close()
 }

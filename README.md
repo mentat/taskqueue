@@ -15,6 +15,10 @@ specified Payload.
 
     go test
 
+## Benchmark
+
+    go test -bench . -benchtime 10s
+
 ## Configuration
 
 See the __taskqueue.ini__ file for details on configuring the service.

@@ -23,7 +23,7 @@ func NewTestHandler() *TestHandler {
 		Create a new Test Handler object.
 	*/
 	th := &TestHandler{
-		Pipeline: make(chan AsyncTask, 100),
+		Pipeline: make(chan AsyncTask, 10000),
 	}
 	return th
 }
@@ -38,38 +38,35 @@ func (t TestHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	t.Pipeline <- at
 }
 
-func setupTestServer(configFile string, port int) (*AMQP, *TestHandler, *net.TCPListener, error) {
+func setupTestServer(configFile string, port int) (*AMQP, *TestHandler, *net.TCPListener, chan error, error) {
 	config, err := ParseConfigFile(configFile)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	server := NewAMQP(config.AmqpServer)
 	err = server.Connect()
 	if err != nil {
 		//t.Fatalf("Could not connect with AMQP server: %s", err)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	errChan := make(chan error)
+	errChan := make(chan error, 1)
 
 	// Spawn goroutines to handle each queue's operation.
 	for i := range config.Queues {
 
-		// Go ahead and purge all configured queues to ensure we are getting
-		// fresh messages.  Only do this if queue exists.
-		if _, err := server.CountMessages(config.Queues[i].Name); err == nil {
-			server.PurgeQueue(config.Queues[i].Name)
-		}
+		// Go ahead and purge the channel before the test
+		server.PurgeQueue(config.Queues[i].Name)
 
-		delivery, err := server.ConsumeQueue(config.Queues[i].Name)
+		ch, err := server.GetChannel()
+
 		if err != nil {
-			//t.Fatalf("Could not read queue: %s %s", config.Queues[i].Name, err)
-			return nil, nil, nil, fmt.Errorf("Cannot consume queue: %s", err)
+			return nil, nil, nil, nil, err
 		}
 
-		go readQueue(&config.Queues[i], delivery, errChan)
+		go readQueue(&config.Queues[i], ch, errChan)
 	}
 
 	testHttp := NewTestHandler()
@@ -85,16 +82,25 @@ func setupTestServer(configFile string, port int) (*AMQP, *TestHandler, *net.TCP
 		httpServer.Serve(testListener)
 	}()
 
-	return server, testHttp, testListener, nil
+	return server, testHttp, testListener, errChan, nil
 }
 
 func TestQueueAndWebhook(t *testing.T) {
 
 	port := 9997
-	server, handler, listener, err := setupTestServer("taskqueue.ini", port)
+	server, handler, listener, errChan, err := setupTestServer("taskqueue.ini", port)
+	defer server.Close()
+	defer listener.Close()
+
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
+
+	channel, err := server.GetChannel()
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	defer channel.Close()
 
 	// Now see if we can send some webhooks!
 	task1 := AsyncTask{
@@ -102,23 +108,34 @@ func TestQueueAndWebhook(t *testing.T) {
 	}
 
 	payLoad, _ := json.Marshal(task1)
-	server.Publish("Queue1", string(payLoad))
+	channel.Publish("Queue1", string(payLoad))
 
 	select {
+	case err := <-errChan:
+		t.Fatalf("Error reading channel: %s", err)
 	case msg := <-handler.Pipeline:
 		fmt.Printf("Got it: %s", msg.URL)
 	}
-
-	listener.Close()
-	server.Close()
 }
 
-func BenchmarkWebhooks(b *testing.B) {
+func BenchmarkWebhooksQueue3(b *testing.B) {
 	port := 9999 + rand.Intn(100)
-	server, handler, listener, err := setupTestServer("taskqueue.ini", port)
+
+	server, handler, listener, errChan, err := setupTestServer("taskqueue.ini", port)
+
+	defer server.Close()
+	defer listener.Close()
+
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
+
+	// Create a channel for publishing messages.
+	channel, err := server.GetChannel()
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	defer channel.Close()
 
 	receiveCount := 0
 
@@ -131,7 +148,10 @@ func BenchmarkWebhooks(b *testing.B) {
 		}
 
 		payLoad, _ := json.Marshal(task1)
-		server.Publish("Queue1", string(payLoad))
+		err := channel.Publish("Queue3", string(payLoad))
+		if err != nil {
+			b.Fatalf("Error publishing message: %s", err)
+		}
 
 	}
 
@@ -140,22 +160,26 @@ func BenchmarkWebhooks(b *testing.B) {
 loop:
 	for receiveCount != b.N {
 		select {
+		case err := <-errChan:
+			b.Fatalf("Error reading channel: %s", err)
 		case <-handler.Pipeline:
 			lastMessageAt = time.Now()
 			receiveCount++
-			//fmt.Println("REQ")
 		default:
-			if time.Now().Unix()-lastMessageAt.Unix() > 3 {
+			if time.Now().Unix()-lastMessageAt.Unix() > 10 {
+				// Check queue
+				c, err := channel.CountMessages("Queue3")
+				if err != nil {
+					fmt.Println("Count fail: ", err)
+				} else {
+					fmt.Println("Messages in queue is: ", c)
+				}
 				break loop
 			}
-
 		}
 	}
 
 	if receiveCount != b.N {
 		b.Errorf("Not all of the messages have been received: %d", receiveCount)
 	}
-
-	listener.Close()
-	server.Close()
 }

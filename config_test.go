@@ -13,7 +13,7 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("Invalid parse of config.")
 	}
 
-	if len(config.Queues) != 2 {
+	if len(config.Queues) != 3 {
 		t.Fatalf("Invalid parse of config queues.")
 	}
 
