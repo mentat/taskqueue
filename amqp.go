@@ -55,6 +55,18 @@ func (server *AMQP) Publish(queueName, body string) error {
 	return err
 }
 
+func (server *AMQP) CountMessages(queueName string) (int64, error) {
+	/*
+	Get the count of pending messages in a queue.
+	*/
+	q, err := server.channel.QueueInspect(queueName)
+
+	if err != nil {
+		return 0, err
+	}
+	return int64(q.Messages), nil
+}
+
 func (server *AMQP) PurgeQueue(queueName string) error {
 	/*
 		Purge all pending messages in a queue.

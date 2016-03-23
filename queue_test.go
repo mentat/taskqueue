@@ -58,13 +58,15 @@ func setupTestServer(configFile string, port int) (*AMQP, *TestHandler, *net.TCP
 	for i := range config.Queues {
 
 		// Go ahead and purge all configured queues to ensure we are getting
-		// fresh messages.
-		server.PurgeQueue(config.Queues[i].Name)
+		// fresh messages.  Only do this if queue exists.
+		if _, err := server.CountMessages(config.Queues[i].Name); err == nil {
+			server.PurgeQueue(config.Queues[i].Name)
+		}
 
 		delivery, err := server.ConsumeQueue(config.Queues[i].Name)
 		if err != nil {
 			//t.Fatalf("Could not read queue: %s %s", config.Queues[i].Name, err)
-			return nil, nil, nil, err
+			return nil, nil, nil, fmt.Errorf("Cannot consume queue: %s", err)
 		}
 
 		go readQueue(&config.Queues[i], delivery, errChan)
