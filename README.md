@@ -11,13 +11,13 @@ It works like this:
 
  1. Some application wants to defer the execution of a task.  To do this
     they create a JSON message and send it to a specific RabbitMQ queue:
-```json
-{
-  "url":"/tasks/my_fun_task",
-  "countdown": 20,
-  "max_retries": 3
-}
-```
+    ```json
+    {
+      "url":"/tasks/my_fun_task",
+      "countdown": 20,
+      "max_retries": 3
+    }
+    ```
  2. The taskqueue service receives this task from RabbitMQ and executes the
     HTTP request after a 20 second wait.  If the result is not a 200, the
     task will retry two more times before failing.
