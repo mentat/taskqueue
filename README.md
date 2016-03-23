@@ -26,18 +26,18 @@ It works like this:
 
 A task execution message has the following format:
 
- * url - the path or full URL of the task to execute.
- * eta - the Posix timestamp of when this task should run (optional).
- * countdown - the number of seconds to wait before running the task (optional).
- * max_retries - the number of times to retry this task (optional, default is
+ * __url__ - the path or full URL of the task to execute.
+ * __eta__ - the Posix timestamp of when this task should run (optional).
+ * __countdown__ - the number of seconds to wait before running the task (optional).
+ * __max_retries__ - the number of times to retry this task (optional, default is
    to retry forever).
- * payload - the JSON encoded data to send to the function.
- * expires - the Posix timestamp of when this task will expire if not run
+ * __payload__ - the JSON encoded data to send to the function.
+ * __expires__ - the Posix timestamp of when this task will expire if not run
    (optional, default is no expiration).
- * queue - the Queue name to send the task to.  Each queue can be configured
+ * __queue__ - the Queue name to send the task to.  Each queue can be configured
    with different concurrency and retry semantics (optional, defaults to
    default queue).
- * metadata - extra JSON data used for request handler extensions (optional).
+ * __metadata__ - extra JSON data used for request handler extensions (optional).
 
 ## Building
 
