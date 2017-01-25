@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/juju/loggo"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type AsyncTask struct {
@@ -19,10 +21,14 @@ type AsyncTask struct {
 	Queue      string `json:"queue"`
 }
 
-var RabbitServer *AMQP
+// BackendServer -
+var BackendServer Backend
+
+var logger = loggo.GetLogger("taskqueue")
 
 func main() {
-	fmt.Println("Starting up...")
+	logger.SetLogLevel(loggo.TRACE)
+	logger.Infof("Starting up...")
 
 	fileName := os.Getenv("TASKQUEUE_CONFIG_FILE")
 	if fileName == "" {
@@ -35,14 +41,15 @@ func main() {
 	config, err := ParseConfigFile(fileName)
 
 	if err != nil {
-		fmt.Println("The configuration file could not be parsed:", err)
+		logger.Errorf("The configuration file could not be parsed: %s", err)
 		os.Exit(1)
 	}
 
-	RabbitServer := NewAMQP(config.AmqpServer)
-	err = RabbitServer.Connect()
+	BackendServer, err := GetBackend(config.ServerConnectString)
+
+	err = BackendServer.Connect()
 	if err != nil {
-		fmt.Println("Could not connect with AMQP server:", err)
+		logger.Errorf("Could not connect with backend server: %s", err)
 		os.Exit(1)
 	}
 
@@ -51,9 +58,9 @@ func main() {
 	// Spawn goroutines to handle each queue's operation.
 	for i := range config.Queues {
 
-		channel, err := RabbitServer.GetChannel()
+		channel, err := BackendServer.GetChannel()
 		if err != nil {
-			fmt.Println("Could not get channel:", err)
+			logger.Errorf("Could not get channel: %s", err)
 			os.Exit(1)
 		}
 
@@ -65,46 +72,7 @@ func main() {
 	r.HandleFunc("/tasks/push/{id}", GetPushTask).Methods("GET")
 	r.HandleFunc("/tasks/push/{id}", ModifyPushTask).Methods("PUT")
 	r.HandleFunc("/tasks/push/{id}", DeletePushTask).Methods("DELETE")
+	r.Handle("/metrics", promhttp.Handler())
 
 	http.ListenAndServe(":12345", r)
-}
-
-func decodeForm(req *http.Request) (*AsyncTask, error) {
-	return nil, nil
-}
-
-func decodeJSON(req *http.Request) (*AsyncTask, error) {
-	return nil, nil
-}
-
-func CreatePushTask(http.ResponseWriter, *http.Request) {
-	/*
-	   Create a new Push Task.
-	   Not needed at the moment for the requirements, but added as a
-	   placeholder.
-	*/
-}
-
-func ModifyPushTask(http.ResponseWriter, *http.Request) {
-	/*
-		Modify a Push task.
-		Not needed at the moment for the requirements, but added as a
-		placeholder
-	*/
-}
-
-func DeletePushTask(http.ResponseWriter, *http.Request) {
-	/*
-		Delete a Push task.
-		Not needed at the moment for the requirements, but added as a
-		placeholder
-	*/
-}
-
-func GetPushTask(http.ResponseWriter, *http.Request) {
-	/*
-		Get a Push task.
-		Not needed at the moment for the requirements, but added as a
-		placeholder
-	*/
 }

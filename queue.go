@@ -7,16 +7,15 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/streadway/amqp"
 )
 
 type ackMessage struct {
-	Msg *amqp.Delivery
-	Ack bool
+	Msg     *Delivery
+	Ack     bool
 	Requeue bool
 }
 
+// RetryData -
 type RetryData struct {
 	MaxRetries     int64
 	CurrentRetries int64
@@ -24,11 +23,13 @@ type RetryData struct {
 	ETA            int64 // Time as posixtime
 }
 
+// ThreadSafeMap -
 type ThreadSafeMap struct {
 	data  map[string]RetryData
 	mutex sync.RWMutex
 }
 
+// NewThreadSafeMap -
 func NewThreadSafeMap() *ThreadSafeMap {
 	tsm := &ThreadSafeMap{
 		data: make(map[string]RetryData),
@@ -36,18 +37,21 @@ func NewThreadSafeMap() *ThreadSafeMap {
 	return tsm
 }
 
+// Delete -
 func (m *ThreadSafeMap) Delete(key string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	delete(m.data, key)
 }
 
+// Set -
 func (m *ThreadSafeMap) Set(key string, data RetryData) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.data[key] = data
 }
 
+// Get -
 func (m *ThreadSafeMap) Get(key string) (data RetryData, ok bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -70,7 +74,7 @@ func calculateEta(now *time.Time, rt *RetryData, task *AsyncTask, config *queueC
 	rt.ETA = now.Unix() + int64(rt.LastBackoff)
 }
 
-func readTask(d *amqp.Delivery, retryData *ThreadSafeMap, config *queueConfig,
+func readTask(d *Delivery, retryData *ThreadSafeMap, config *queueConfig,
 	ec chan error, sem chan bool, ack chan ackMessage) {
 	/*
 		Read a task and dispatch it's webhook.
@@ -102,11 +106,13 @@ func readTask(d *amqp.Delivery, retryData *ThreadSafeMap, config *queueConfig,
 		// Sleep a little bit to prevent a busy loop.
 		time.Sleep(100 * time.Millisecond)
 		ack <- ackMessage{
-		   Ack: false,
-		   Msg: d,
-	   	}
+			Ack: false,
+			Msg: d,
+		}
 		return
 	}
+
+	taskCounts.Inc()
 
 	// Give the webhook a long timeout...
 	timeout := time.Duration(60 * 60 * 6 * time.Second)
@@ -123,10 +129,10 @@ func readTask(d *amqp.Delivery, retryData *ThreadSafeMap, config *queueConfig,
 		// as a retry since it is probably a service issue
 		d.Nack(false, true)
 		ack <- ackMessage{
-		   Ack: false,
-		   Requeue: true,
-		   Msg: d,
-	   	}
+			Ack:     false,
+			Requeue: true,
+			Msg:     d,
+		}
 	} else if resp.StatusCode != 200 {
 		fmt.Printf("ERR2\n")
 		// Some kind of error, retry
@@ -136,18 +142,18 @@ func readTask(d *amqp.Delivery, retryData *ThreadSafeMap, config *queueConfig,
 			retryData.Delete(d.MessageId)
 			Error.Printf("Task %s exceeded maximum retries and was cancelled.", d.MessageId)
 			ack <- ackMessage{
-			   Ack: false,
-			   Requeue: false,
-			   Msg: d,
-		   	}
+				Ack:     false,
+				Requeue: false,
+				Msg:     d,
+			}
 		} else {
 			calculateEta(&now, &rt, &task, config)
 			retryData.Set(d.MessageId, rt)
 			ack <- ackMessage{
-			   Ack: false,
-			   Requeue: true,
-			   Msg: d,
-		   	}
+				Ack:     false,
+				Requeue: true,
+				Msg:     d,
+			}
 		}
 
 	} else {
@@ -161,7 +167,7 @@ func readTask(d *amqp.Delivery, retryData *ThreadSafeMap, config *queueConfig,
 
 }
 
-func readQueue(config *queueConfig, channel *AMQPChannel, ec chan error) {
+func readQueue(config *queueConfig, channel Channel, ec chan error) {
 	/*
 	   Read from a RabbitMQ queue and spawn a goroutine to handle the
 	   dispatch of the HTTP request.
@@ -218,13 +224,13 @@ func readQueue(config *queueConfig, channel *AMQPChannel, ec chan error) {
 		go readTask(&msg, retryData, config, errorChan, sem, ackChan)
 
 		select {
-		case ack := <- ackChan:
+		case ack := <-ackChan:
 			if ack.Ack {
 				ack.Msg.Ack(false)
 			} else {
 				ack.Msg.Nack(false, ack.Requeue)
 			}
-		case err := <- errorChan:
+		case err := <-errorChan:
 			ec <- err
 			return
 		default:

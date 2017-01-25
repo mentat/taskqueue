@@ -2,15 +2,19 @@ package main
 
 import "github.com/streadway/amqp"
 
+// AMQP -
 type AMQP struct {
 	connectString string
 	conn          *amqp.Connection
 }
 
+// AMQPChannel -
 type AMQPChannel struct {
-	channel       *amqp.Channel
+	channel     *amqp.Channel
+	doneChannel chan int
 }
 
+// NewAMQP -
 func NewAMQP(connect string) *AMQP {
 	/*
 		Create a new AMQP object.
@@ -21,6 +25,7 @@ func NewAMQP(connect string) *AMQP {
 	return server
 }
 
+// Close -
 func (server *AMQP) Close() error {
 	/*
 		Close out the server when we are done.
@@ -33,6 +38,7 @@ func (server *AMQP) Close() error {
 	return nil
 }
 
+// Connect -
 func (server *AMQP) Connect() error {
 	/*
 		Try to connect to the RabbitMQ server.
@@ -48,7 +54,8 @@ func (server *AMQP) Connect() error {
 	return nil
 }
 
-func (server *AMQP) GetChannel() (*AMQPChannel, error) {
+// GetChannel -
+func (server *AMQP) GetChannel() (Channel, error) {
 	ch, err := server.conn.Channel()
 
 	if err != nil {
@@ -82,13 +89,20 @@ func (server *AMQP) PurgeQueue(queueName string) error {
 	return nil
 }
 
+func (channel *AMQPChannel) Ack(delivery *Delivery) error {
+	return nil
+}
 
-func (server *AMQPChannel) Publish(queueName, body string) error {
-	err := server.channel.Publish(
+func (channel *AMQPChannel) Nack(delivery *Delivery) error {
+	return nil
+}
+
+func (channel *AMQPChannel) Publish(queueName, body string) error {
+	err := channel.channel.Publish(
 		"",        // exchange
 		queueName, // routing key
 		true,      // mandatory
-		false,	   // immediate
+		false,     // immediate
 		amqp.Publishing{
 			DeliveryMode: amqp.Persistent,
 			ContentType:  "text/plain",
@@ -97,11 +111,11 @@ func (server *AMQPChannel) Publish(queueName, body string) error {
 	return err
 }
 
-func (server *AMQPChannel) CountMessages(queueName string) (int64, error) {
+func (channel *AMQPChannel) CountMessages(queueName string) (int64, error) {
 	/*
 		Get the count of pending messages in a queue.
 	*/
-	q, err := server.channel.QueueInspect(queueName)
+	q, err := channel.channel.QueueInspect(queueName)
 
 	if err != nil {
 		return 0, err
@@ -109,12 +123,12 @@ func (server *AMQPChannel) CountMessages(queueName string) (int64, error) {
 	return int64(q.Messages), nil
 }
 
-func (server *AMQPChannel) ConsumeQueue(queueName string) (<-chan amqp.Delivery, error) {
+func (channel *AMQPChannel) ConsumeQueue(queueName string) (<-chan Delivery, error) {
 	/*
 		Asynchronously consume items off the queue by returning a channel.
 	*/
 
-	q, err := server.channel.QueueDeclare(
+	q, err := channel.channel.QueueDeclare(
 		queueName, // name
 		true,      // durable
 		false,     // delete when unused
@@ -127,33 +141,48 @@ func (server *AMQPChannel) ConsumeQueue(queueName string) (<-chan amqp.Delivery,
 		return nil, err
 	}
 
-	msgs, err := server.channel.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
+	internalChannel := make(chan Delivery, 10)
 
-	if err != nil {
-		return nil, err
-	}
+	go func(done chan int) {
 
-	return msgs, nil
+		msgs, err := channel.channel.Consume(
+			q.Name, // queue
+			"",     // consumer
+			false,  // auto-ack
+			false,  // exclusive
+			false,  // no-local
+			false,  // no-wait
+			nil,    // args
+		)
+
+		if err != nil {
+			return
+		}
+
+		select {
+		case <-done:
+			channel.channel.Close()
+			return
+		case in := <-msgs:
+			delivery := Delivery{
+				MessageID: in.MessageId,
+				Body:      in.Body,
+			}
+			internalChannel <- delivery
+		}
+
+	}(channel.doneChannel)
+
+	return internalChannel, nil
 }
 
-
-
-func (server *AMQPChannel) Close() error {
+// Close -
+func (channel *AMQPChannel) Close() error {
 	/*
 		Close out the server when we are done.
 	*/
-
-	if server.channel != nil {
-		server.channel.Close()
-	}
+	logger.Infof("Closing AMQP channel.")
+	channel.doneChannel <- 1
 
 	return nil
 }

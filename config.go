@@ -31,9 +31,12 @@ type queueConfig struct {
 	RateDetails       rateSpec
 }
 
+// ServerConfig -
 type ServerConfig struct {
-	AmqpServer string
-	Queues     []queueConfig
+	ServerConnectString string
+	Backend             string
+	Tombstone           rateSpec
+	Queues              []queueConfig
 }
 
 func parseRateSpec(spec string) (*rateSpec, error) {
@@ -64,6 +67,7 @@ func parseRateSpec(spec string) (*rateSpec, error) {
 
 }
 
+// ParseConfigFile -
 func ParseConfigFile(filename string) (*ServerConfig, error) {
 	/*
 	   Read in the configuration values.
@@ -75,13 +79,22 @@ func ParseConfigFile(filename string) (*ServerConfig, error) {
 	}
 
 	server := cfg.Section("").Key("server").String()
+	backend := cfg.Section("").Key("backend").String()
+	tombstoneString := cfg.Section("").Key("tombstone_delay").String()
+	tombstone, err := parseRateSpec(tombstoneString)
 
-	if !amqpServerRe.MatchString(server) {
-		return nil, fmt.Errorf("AMQP server definition is invalid.")
+	if err != nil {
+		return nil, fmt.Errorf("Tombstone spec is invalid")
+	}
+
+	if backend == "amqp" && !amqpServerRe.MatchString(server) {
+		return nil, fmt.Errorf("AMQP server definition is invalid")
 	}
 
 	config := &ServerConfig{
-		AmqpServer: server,
+		ServerConnectString: server,
+		Backend:             backend,
+		Tombstone:           *tombstone,
 	}
 
 	sectionNames := cfg.SectionStrings()
